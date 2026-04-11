@@ -4,8 +4,28 @@
   box-sizing: border-box;
 }
 
-body {
+html, body {
   margin: 0;
   padding: 0;
+  min-height: 100%;
+}
+
+@keyframes gradient-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+body {
   line-height: 1.5;
+  background: linear-gradient(
+    135deg,
+    #dce8f5 0%,
+    #ede4f8 25%,
+    #e2f0eb 50%,
+    #f5dce8 75%,
+    #dce8f5 100%
+  );
+  background-size: 300% 300%;
+  animation: gradient-shift 18s ease infinite;
 }

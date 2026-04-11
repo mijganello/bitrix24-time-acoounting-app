@@ -41,6 +41,47 @@ docker compose -f docker-compose.prod.yml up --build
 | Dev | `docker-compose.yml` | Vite dev server, HMR работает |
 | Prod | `docker-compose.prod.yml` | Собранная статика, минифицировано |
 
+## Управление пользователями
+
+Регистрация новых пользователей доступна только через терминал с помощью скрипта `backend/create_user.py`.
+
+### Создать пользователя
+
+```bash
+# Интерактивный режим (запросит логин и пароль)
+docker compose exec backend python create_user.py
+
+# Передать параметры напрямую (не рекомендуется — пароль попадёт в историю)
+docker compose exec backend python create_user.py -u admin -p mypassword123
+```
+
+> Пароль должен содержать **минимум 8 символов**.
+
+### Список пользователей
+
+```bash
+docker compose exec backend python create_user.py --list
+```
+
+### Деактивировать / активировать
+
+```bash
+docker compose exec backend python create_user.py --deactivate <username>
+docker compose exec backend python create_user.py --activate <username>
+```
+
+Деактивированный пользователь не может войти в приложение; его данные сохраняются.
+
+### Удалить пользователя
+
+```bash
+docker compose exec backend python create_user.py --delete <username>
+```
+
+Скрипт запросит подтверждение перед удалением.
+
+---
+
 ## Структура проекта
 
 ```

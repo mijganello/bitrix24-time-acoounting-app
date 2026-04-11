@@ -1,98 +1,91 @@
-import { useEffect, useState } from 'react'
-import {
-  ConfigProvider,
-  Layout,
-  Typography,
-  Card,
-  Alert,
-  Descriptions,
-  Spin,
-  theme,
-} from 'antd'
-import { ApiOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import { useState } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { ConfigProvider } from 'antd'
+import { AuthProvider } from './hooks/useAuth'
+import ProtectedRoute from './components/ProtectedRoute'
+import AppHeader from './components/AppHeader'
+import AppSidebar from './components/AppSidebar'
+import SidebarToggle from './components/SidebarToggle'
+import AppFooter from './components/AppFooter'
+import LoginPage from './pages/LoginPage'
+import HomePage from './pages/HomePage'
+import PlatformStatusPage from './pages/PlatformStatusPage'
 
-const { Header, Content } = Layout
-const { Title, Text } = Typography
-
-function App() {
-  const [apiInfo, setApiInfo] = useState(null)
-  const [status, setStatus] = useState(null)
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    Promise.all([
-      fetch('/api/health')
-        .then((res) => res.json())
-        .then((data) => setStatus(data.message)),
-      fetch('/api/info')
-        .then((res) => res.json())
-        .then((data) => setApiInfo(data)),
-    ])
-      .catch(() => setError('Не удалось подключиться к API'))
-      .finally(() => setLoading(false))
-  }, [])
+function AppLayout() {
+  const [collapsed, setCollapsed] = useState(false)
 
   return (
-    <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
-      <Layout style={{ minHeight: '100vh' }}>
-        <Header
+    <div
+      style={{
+        display: 'flex',
+        minHeight: '100vh',
+        background: 'transparent',
+        padding: 10,
+        gap: 10,
+        boxSizing: 'border-box',
+      }}
+    >
+      {/* Левая колонка: кнопка + сайдбар */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
+        <SidebarToggle collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
+        <AppSidebar collapsed={collapsed} />
+      </div>
+
+      {/* Правая колонка: хэдер + контент + футер */}
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: 10, minWidth: 0 }}>
+        <AppHeader />
+        <div
           style={{
-            background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            alignItems: 'center',
-            height: 'auto',
-            padding: '24px',
-            textAlign: 'center',
+            flex: 1,
+            overflow: 'auto',
+            minWidth: 0,
+            background: 'rgba(255, 255, 255, 0.62)',
+            backdropFilter: 'blur(18px)',
+            WebkitBackdropFilter: 'blur(18px)',
+            border: 'none',
+            borderRadius: 16,
+            boxShadow: '0 0 0 1px rgba(255, 255, 255, 0.7), 0 4px 24px rgba(80, 70, 150, 0.09)',
+            padding: '36px',
           }}
         >
-          <Title level={2} style={{ color: '#fff', margin: 0 }}>
-            Bitrix24 — Учёт времени
-          </Title>
-          <Text style={{ color: '#bfdbfe' }}>
-            Анализ времязатрат по задачам и проектам
-          </Text>
-        </Header>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/status" element={<PlatformStatusPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
+        <AppFooter />
+      </div>
+    </div>
+  )
+}
 
-        <Content style={{ maxWidth: 800, margin: '32px auto', padding: '0 16px', width: '100%' }}>
-          <Spin spinning={loading} size="large">
-            <Card
-              title={
-                <>
-                  <ApiOutlined style={{ marginRight: 8 }} />
-                  Статус API
-                </>
+function App() {
+  return (
+    <ConfigProvider
+      theme={{
+        token: {
+          colorPrimary: '#4361d8',
+          borderRadius: 10,
+          colorBgLayout: '#f2f3f8',
+        },
+      }}
+    >
+      <BrowserRouter>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route
+              path="/*"
+              element={
+                <ProtectedRoute>
+                  <AppLayout />
+                </ProtectedRoute>
               }
-              style={{ marginBottom: 24 }}
-            >
-              {error ? (
-                <Alert title={error} type="error" showIcon />
-              ) : status ? (
-                <Alert title={status} type="success" showIcon />
-              ) : null}
-            </Card>
-
-            {apiInfo && (
-              <Card
-                title={
-                  <>
-                    <InfoCircleOutlined style={{ marginRight: 8 }} />
-                    О приложении
-                  </>
-                }
-              >
-                <Descriptions column={1}>
-                  <Descriptions.Item label="Название">{apiInfo.app}</Descriptions.Item>
-                  <Descriptions.Item label="Версия">{apiInfo.version}</Descriptions.Item>
-                  <Descriptions.Item label="Описание">{apiInfo.description}</Descriptions.Item>
-                </Descriptions>
-              </Card>
-            )}
-          </Spin>
-        </Content>
-      </Layout>
+            />
+          </Routes>
+        </AuthProvider>
+      </BrowserRouter>
     </ConfigProvider>
   )
 }

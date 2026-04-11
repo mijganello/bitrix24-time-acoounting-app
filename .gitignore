@@ -37,3 +37,6 @@ Thumbs.db
 docs/
 
 .github/
+
+# Database
+backend/data/
