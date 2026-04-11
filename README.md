@@ -1,0 +1,64 @@
+# Bitrix24 Time Accounting App
+
+Веб-приложение для учёта времязатрат по задачам и проектам из Bitrix24.
+
+## Стек
+
+- **Backend**: Python 3.12 + FastAPI 0.115+ + Uvicorn
+- **Frontend**: React 19 + Vite 6
+- **Proxy**: Nginx 1.27
+
+## Быстрый старт
+
+```bash
+# Скопируй .env файл и заполни переменные
+cp .env.example .env
+
+# Запустить все сервисы
+docker compose up --build
+```
+
+Приложение будет доступно на [http://localhost](http://localhost).
+
+| Адрес | Описание |
+|---|---|
+| `http://localhost` | React frontend |
+| `http://localhost/api/health` | Проверка статуса API |
+| `http://localhost/docs` | Swagger UI (FastAPI) |
+
+## Продакшн-запуск
+
+В dev-режиме фронт раздаётся через Vite dev server (с HMR). В prod-режиме Vite собирает статику, которую отдаёт Nginx напрямую — без Node в контейнере.
+
+```bash
+docker compose -f docker-compose.prod.yml up --build
+```
+
+Приложение так же доступно на [http://localhost](http://localhost).
+
+| Режим | Файл | Frontend |
+|---|---|---|
+| Dev | `docker-compose.yml` | Vite dev server, HMR работает |
+| Prod | `docker-compose.prod.yml` | Собранная статика, минифицировано |
+
+## Структура проекта
+
+```
+├── backend/          # FastAPI приложение
+│   ├── app/
+│   │   └── main.py
+│   ├── Dockerfile
+│   └── requirements.txt
+├── frontend/         # React + Vite приложение
+│   ├── src/
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   ├── Dockerfile
+│   ├── Dockerfile.prod
+│   └── package.json
+├── nginx/
+│   ├── nginx.conf        # Dev: reverse proxy с HMR
+│   └── nginx.prod.conf   # Prod: reverse proxy со статикой
+├── docker-compose.yml
+└── docker-compose.prod.yml
+```
