@@ -1,5 +1,5 @@
 import { Menu, Button, ConfigProvider } from "antd";
-import { HomeOutlined, LogoutOutlined, DashboardOutlined } from "@ant-design/icons";
+import { HomeOutlined, LogoutOutlined, DashboardOutlined, BarChartOutlined } from "@ant-design/icons";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
@@ -10,16 +10,28 @@ const menuItems = [
     label: "Главная",
   },
   {
+    key: "/reports",
+    icon: <BarChartOutlined />,
+    label: "Отчёты",
+  },
+  {
     key: "/status",
     icon: <DashboardOutlined />,
     label: "Статус платформы",
   },
 ];
 
+function useSelectedKey() {
+  const location = useLocation();
+  const path = location.pathname;
+  const match = menuItems.find((item) => path === item.key || (item.key !== '/' && path.startsWith(item.key)));
+  return match ? match.key : '/';
+}
+
 export default function AppSidebar({ collapsed }) {
   const navigate = useNavigate();
-  const location = useLocation();
   const { logout } = useAuth();
+  const selectedKey = useSelectedKey();
 
   return (
     <div
@@ -55,7 +67,7 @@ export default function AppSidebar({ collapsed }) {
         <Menu
           mode="inline"
           inlineCollapsed={collapsed}
-          selectedKeys={[location.pathname]}
+          selectedKeys={[selectedKey]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
           style={{

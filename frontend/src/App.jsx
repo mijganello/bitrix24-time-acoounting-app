@@ -10,6 +10,11 @@ import AppFooter from './components/AppFooter'
 import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
 import PlatformStatusPage from './pages/PlatformStatusPage'
+import ReportsPage from './pages/ReportsPage'
+import UsersSummaryPage from './pages/UsersSummaryPage'
+import ProjectsReportPage from './pages/ProjectsReportPage'
+import TeamHeatmapPage from './pages/TeamHeatmapPage'
+import MyDashboardPage from './pages/MyDashboardPage'
 
 function AppLayout() {
   const [collapsed, setCollapsed] = useState(false)
@@ -18,11 +23,12 @@ function AppLayout() {
     <div
       style={{
         display: 'flex',
-        minHeight: '100vh',
+        height: '100vh',
         background: 'transparent',
         padding: 10,
         gap: 10,
         boxSizing: 'border-box',
+        overflow: 'hidden',
       }}
     >
       {/* Левая колонка: кнопка + сайдбар */}
@@ -32,7 +38,7 @@ function AppLayout() {
       </div>
 
       {/* Правая колонка: хэдер + контент + футер */}
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: 10, minWidth: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: 10, minWidth: 0, overflow: 'hidden' }}>
         <AppHeader />
         <div
           style={{
@@ -51,6 +57,12 @@ function AppLayout() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/status" element={<PlatformStatusPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/reports/users-summary" element={<UsersSummaryPage />} />
+            <Route path="/reports/projects" element={<ProjectsReportPage />} />
+            <Route path="/reports/team-heatmap" element={<TeamHeatmapPage />} />
+            <Route path="/reports/my-dashboard" element={<MyDashboardPage />} />
+            <Route path="/reports/*" element={<ReportsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
