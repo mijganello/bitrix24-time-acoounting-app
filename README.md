@@ -1,105 +1,152 @@
-# Bitrix24 Time Accounting App
+# WORKERPUNCH v2 — alpha
 
-Веб-приложение для учёта времязатрат по задачам и проектам из Bitrix24.
+Платформа учёта рабочего времени для команд на базе Bitrix24. Аналитические отчёты, контроль нагрузки и прозрачность по задачам и проектам.
+
+> **Alpha-версия.** Основной функционал работает, API стабилен. Возможны изменения без обратной совместимости.
 
 ## Стек
 
-- **Backend**: Python 3.12 + FastAPI 0.115+ + Uvicorn
-- **Frontend**: React 19 + Vite 6
-- **Proxy**: Nginx 1.27
+- **Backend**: Python 3.12, FastAPI 0.115+, Uvicorn, SQLite
+- **Frontend**: React 19, Vite 6, Ant Design 6
+- **Инфраструктура**: Nginx 1.27, Docker Compose
 
-## Быстрый старт
+На сервере нужен только **Docker** — Python, Node.js и Nginx устанавливаются автоматически внутри контейнеров.
+
+---
+
+## Развёртывание на сервере (prod)
+
+### Требования к серверу
+
+- Linux (Ubuntu 22.04+ рекомендуется)
+- Docker 24+, Docker Compose v2
+- Открытый порт `80` (и `443`, если нужен HTTPS)
 
 ```bash
-# Скопируй .env файл и заполни переменные
-cp .env.example .env
-
-# Запустить все сервисы
-docker compose up --build
+# Установка Docker на чистый Ubuntu
+curl -fsSL https://get.docker.com | sh
 ```
 
-Приложение будет доступно на [http://localhost](http://localhost).
+### Шаги
+
+```bash
+# 1. Клонировать репозиторий
+git clone <repo-url>
+cd bitrix24-time-accounting-app
+
+# 2. Создать и заполнить .env
+cp .env.example .env
+nano .env   # заполни BITRIX24_WEBHOOK_URL и SECRET_KEY
+
+# 3. Сгенерировать SECRET_KEY (если нет)
+openssl rand -hex 32
+
+# 4. Запустить
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+Приложение доступно на `http://<ip-сервера>`.
 
 | Адрес | Описание |
 |---|---|
-| `http://localhost` | React frontend |
-| `http://localhost/api/health` | Проверка статуса API |
-| `http://localhost/docs` | Swagger UI (FastAPI) |
+| `/` | React frontend |
+| `/api/health` | Проверка статуса API |
+| `/api/info` | Версия и окружение |
+| `/docs` | Swagger UI |
 
-## Продакшн-запуск
-
-В dev-режиме фронт раздаётся через Vite dev server (с HMR). В prod-режиме Vite собирает статику, которую отдаёт Nginx напрямую — без Node в контейнере.
+### Обновление
 
 ```bash
-docker compose -f docker-compose.prod.yml up --build
+git pull
+docker compose -f docker-compose.prod.yml up --build -d
 ```
 
-Приложение так же доступно на [http://localhost](http://localhost).
+Данные базы хранятся в `backend/data/` — при пересборке **не теряются** (volume примонтирован).
 
-| Режим | Файл | Frontend |
+---
+
+## Локальная разработка (dev)
+
+```bash
+cp .env.example .env   # если ещё нет
+docker compose up --build
+```
+
+В dev-режиме фронт раздаётся через Vite dev server с горячей перезагрузкой (HMR). Бэкенд перезапускается при изменении файлов автоматически.
+
+| Режим | Команда | Frontend |
 |---|---|---|
-| Dev | `docker-compose.yml` | Vite dev server, HMR работает |
-| Prod | `docker-compose.prod.yml` | Собранная статика, минифицировано |
+| Dev | `docker compose up --build` | Vite dev server, HMR |
+| Prod | `docker compose -f docker-compose.prod.yml up --build -d` | Собранная статика через Nginx |
+
+---
 
 ## Управление пользователями
 
-Регистрация новых пользователей доступна только через терминал с помощью скрипта `backend/create_user.py`.
+Самостоятельная регистрация закрыта. Пользователей создаёт администратор через терминал.
 
-### Создать пользователя
+> Для прод-окружения замени `docker compose` на `docker compose -f docker-compose.prod.yml`.
 
 ```bash
-# Интерактивный режим (запросит логин и пароль)
+# Создать пользователя (интерактивно)
 docker compose exec backend python create_user.py
 
-# Передать параметры напрямую (не рекомендуется — пароль попадёт в историю)
-docker compose exec backend python create_user.py -u admin -p mypassword123
-```
-
-> Пароль должен содержать **минимум 8 символов**.
-
-### Список пользователей
-
-```bash
+# Список пользователей
 docker compose exec backend python create_user.py --list
-```
 
-### Деактивировать / активировать
-
-```bash
+# Деактивировать / активировать
 docker compose exec backend python create_user.py --deactivate <username>
 docker compose exec backend python create_user.py --activate <username>
-```
 
-Деактивированный пользователь не может войти в приложение; его данные сохраняются.
-
-### Удалить пользователя
-
-```bash
+# Удалить (запросит подтверждение)
 docker compose exec backend python create_user.py --delete <username>
 ```
 
-Скрипт запросит подтверждение перед удалением.
+Пароль — минимум 8 символов. Деактивированный пользователь не может войти, данные сохраняются.
+
+---
+
+## Версионирование
+
+Версия хранится в двух файлах, их нужно обновлять синхронно:
+
+- [`backend/app/version.py`](backend/app/version.py) — используется в API (`/api/info`) и Swagger
+- [`frontend/package.json`](frontend/package.json) — инжектируется Vite в сборку, отображается в шапке
+
+```bash
+# После обновления обоих файлов:
+git add backend/app/version.py frontend/package.json
+git commit -m "chore: bump version to X.Y.Z"
+git tag vX.Y.Z
+git push origin master --tags
+```
 
 ---
 
 ## Структура проекта
 
 ```
-├── backend/          # FastAPI приложение
+├── backend/
 │   ├── app/
-│   │   └── main.py
-│   ├── Dockerfile
+│   │   ├── main.py
+│   │   ├── version.py       # Версия и название приложения
+│   │   ├── models.py
+│   │   ├── auth.py
+│   │   ├── database.py
+│   │   └── routers/
+│   ├── data/                # SQLite база (volume в prod)
+│   ├── Dockerfile           # Dev: uvicorn --reload
+│   ├── Dockerfile.prod      # Prod: uvicorn --workers 2
 │   └── requirements.txt
-├── frontend/         # React + Vite приложение
+├── frontend/
 │   ├── src/
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── Dockerfile
-│   ├── Dockerfile.prod
-│   └── package.json
+│   ├── Dockerfile           # Dev: Vite dev server
+│   ├── Dockerfile.prod      # Prod: сборка → Nginx
+│   └── package.json         # version здесь → __APP_VERSION__
 ├── nginx/
-│   ├── nginx.conf        # Dev: reverse proxy с HMR
-│   └── nginx.prod.conf   # Prod: reverse proxy со статикой
-├── docker-compose.yml
-└── docker-compose.prod.yml
+│   ├── nginx.conf           # Dev конфиг
+│   └── nginx.prod.conf      # Prod конфиг
+├── docker-compose.yml       # Dev
+├── docker-compose.prod.yml  # Prod
+└── .env.example
 ```
