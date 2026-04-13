@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine
 from app.models import Base
 from app.routers import auth, bitrix, reports
+from app.version import APP_NAME, STAGE, VERSION
 
 
 @asynccontextmanager
@@ -17,9 +18,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Bitrix24 Time Accounting API",
-    description="API для учёта времязатрат из Bitrix24",
-    version="0.1.0",
+    title=f"{APP_NAME} API",
+    description=f"API платформы {APP_NAME} — учёт рабочего времени, аналитика задач и проектов Bitrix24",
+    version=VERSION,
     lifespan=lifespan,
 )
 
@@ -44,7 +45,8 @@ async def health_check() -> dict[str, str]:
 @app.get("/api/info")
 async def get_info() -> dict[str, str]:
     return {
-        "app": "Bitrix24 Time Accounting",
-        "version": "0.1.0",
-        "description": "Учёт времязатрат по задачам и проектам Bitrix24",
+        "app": APP_NAME,
+        "version": VERSION,
+        "stage": STAGE,
+        "description": "Платформа учёта рабочего времени для команд на базе Bitrix24. Аналитические отчёты, контроль нагрузки и прозрачность по задачам и проектам.",
     }
