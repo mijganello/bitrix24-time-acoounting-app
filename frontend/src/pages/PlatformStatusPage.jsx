@@ -114,7 +114,7 @@ export default function PlatformStatusPage() {
             </Space>
           </div>
           <Space size={[6, 6]} wrap>
-            {['FastAPI', 'Python 3.12', 'React 19', 'Ant Design 6', 'Vite 6', 'Docker', 'Nginx', 'Bitrix24 REST API'].map((t) => (
+            {['FastAPI', 'Python 3.12', 'PostgreSQL 16', 'SQLAlchemy 2', 'React 19', 'Ant Design 6', 'Vite 6', 'Docker', 'Nginx', 'Bitrix24 REST API'].map((t) => (
               <Tag key={t}>{t}</Tag>
             ))}
           </Space>

@@ -1,4 +1,14 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: bitrix_app
+      POSTGRES_USER: bitrix_user
+      POSTGRES_PASSWORD: bitrix_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -8,8 +18,11 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
+      - DATABASE_URL=postgresql://bitrix_user:bitrix_pass@db:5432/bitrix_app
     env_file:
       - .env
+    depends_on:
+      - db
     restart: unless-stopped
 
   frontend:
@@ -33,3 +46,6 @@ services:
       - backend
       - frontend
     restart: unless-stopped
+
+volumes:
+  postgres_data:

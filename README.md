@@ -6,11 +6,11 @@
 
 ## Стек
 
-- **Backend**: Python 3.12, FastAPI 0.115+, Uvicorn, SQLite
+- **Backend**: Python 3.12, FastAPI 0.115+, Uvicorn, PostgreSQL 16, SQLAlchemy 2
 - **Frontend**: React 19, Vite 6, Ant Design 6
 - **Инфраструктура**: Nginx 1.27, Docker Compose
 
-На сервере нужен только **Docker** — Python, Node.js и Nginx устанавливаются автоматически внутри контейнеров.
+На сервере нужен только **Docker** — Python, Node.js, Nginx и PostgreSQL устанавливаются автоматически внутри контейнеров.
 
 ---
 
@@ -36,7 +36,7 @@ cd bitrix24-time-accounting-app
 
 # 2. Создать и заполнить .env
 cp .env.example .env
-nano .env   # заполни BITRIX24_WEBHOOK_URL и SECRET_KEY
+nano .env   # заполни BITRIX24_WEBHOOK_URL, SECRET_KEY и DATABASE_URL
 
 # 3. Сгенерировать SECRET_KEY (если нет)
 openssl rand -hex 32
@@ -61,7 +61,7 @@ git pull
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
-Данные базы хранятся в `backend/data/` — при пересборке **не теряются** (volume примонтирован).
+Данные базы хранятся в PostgreSQL — при пересборке контейнеров **не теряются**.
 
 ---
 
@@ -72,12 +72,26 @@ cp .env.example .env   # если ещё нет
 docker compose up --build
 ```
 
+PostgreSQL поднимается автоматически в контейнере `db`, `DATABASE_URL` задаётся в `docker-compose.yml`.
 В dev-режиме фронт раздаётся через Vite dev server с горячей перезагрузкой (HMR). Бэкенд перезапускается при изменении файлов автоматически.
 
 | Режим | Команда | Frontend |
 |---|---|---|
 | Dev | `docker compose up --build` | Vite dev server, HMR |
 | Prod | `docker compose -f docker-compose.prod.yml up --build -d` | Собранная статика через Nginx |
+
+---
+
+## Переменные окружения
+
+| Переменная | Описание | Обязательна |
+|---|---|---|
+| `DATABASE_URL` | Строка подключения PostgreSQL: `postgresql://user:pass@host:5432/db` | Да (в prod) |
+| `SECRET_KEY` | Ключ подписи JWT-токенов (`openssl rand -hex 32`) | Да |
+| `BITRIX24_WEBHOOK_URL` | Вебхук Bitrix24 REST API | Да |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Время жизни токена в минутах (по умолчанию: 480) | Нет |
+
+Локально `DATABASE_URL` не нужна в `.env` — она уже задана в `docker-compose.yml`.
 
 ---
 
@@ -134,7 +148,6 @@ git push origin master --tags
 │   │   ├── auth.py
 │   │   ├── database.py
 │   │   └── routers/
-│   ├── data/                # SQLite база (volume в prod)
 │   ├── Dockerfile           # Dev: uvicorn --reload
 │   ├── Dockerfile.prod      # Prod: uvicorn --workers 2
 │   └── requirements.txt
@@ -146,7 +159,7 @@ git push origin master --tags
 ├── nginx/
 │   ├── nginx.conf           # Dev конфиг
 │   └── nginx.prod.conf      # Prod конфиг
-├── docker-compose.yml       # Dev
-├── docker-compose.prod.yml  # Prod
+├── docker-compose.yml       # Dev (включает контейнер PostgreSQL)
+├── docker-compose.prod.yml  # Prod (PostgreSQL через DATABASE_URL из .env)
 └── .env.example
 ```

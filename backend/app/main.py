@@ -12,7 +12,6 @@ from app.version import APP_NAME, STAGE, VERSION
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    os.makedirs("data", exist_ok=True)
     Base.metadata.create_all(bind=engine)
     yield
 
