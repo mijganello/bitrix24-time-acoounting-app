@@ -162,7 +162,11 @@ function ProjectTasksTable({ tasks, projectHours }) {
           <TaskUsersTable users={record.users ?? []} taskHours={record.hours} />
         ),
         rowExpandable: (record) => (record.users?.length ?? 0) > 0,
+        expandRowByClick: true,
       }}
+      onRow={(record) => ({
+        style: { cursor: (record.users?.length ?? 0) > 0 ? 'pointer' : 'default' },
+      })}
       style={{ background: 'transparent' }}
     />
   )
