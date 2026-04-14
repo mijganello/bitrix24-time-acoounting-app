@@ -1,3 +1,5 @@
+import { API_BASE } from './api.js'
+
 const TOKEN_KEY = 'auth_token'
 
 export const authService = {
@@ -6,7 +8,7 @@ export const authService = {
     formData.append('username', username)
     formData.append('password', password)
 
-    const res = await fetch('/api/auth/login', {
+    const res = await fetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: formData,
@@ -38,7 +40,7 @@ export const authService = {
     const token = this.getToken()
     if (!token) throw new Error('Нет токена')
 
-    const res = await fetch('/api/auth/me', {
+    const res = await fetch(`${API_BASE}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
 

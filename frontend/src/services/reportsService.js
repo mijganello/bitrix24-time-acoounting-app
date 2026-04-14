@@ -1,4 +1,6 @@
-const BASE = '/api/reports'
+import { API_BASE } from './api.js'
+
+const BASE = `${API_BASE}/api/reports`
 
 export const reportsService = {
   async getUsersSummary({ dateFrom, dateTo, userId } = {}) {
