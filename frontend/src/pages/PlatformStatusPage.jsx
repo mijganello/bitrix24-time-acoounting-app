@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Alert, Card, Descriptions, Spin, Badge, Typography, Tag, Space, Divider } from 'antd'
 import { ApiOutlined, InfoCircleOutlined, GlobalOutlined, RocketOutlined, SafetyOutlined } from '@ant-design/icons'
 import { usePortalInfo } from '../hooks/usePortalInfo'
+import { API_BASE } from '../services/api.js'
 
 const { Text, Paragraph } = Typography
 
@@ -14,10 +15,10 @@ export default function PlatformStatusPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/health')
+      fetch(`${API_BASE}/api/health`)
         .then((res) => res.json())
         .then((data) => setStatus(data.message)),
-      fetch('/api/info')
+      fetch(`${API_BASE}/api/info`)
         .then((res) => res.json())
         .then((data) => setApiInfo(data)),
     ])

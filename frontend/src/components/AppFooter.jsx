@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Typography, Space } from 'antd'
 import { usePortalInfo } from '../hooks/usePortalInfo'
+import { API_BASE } from '../services/api.js'
 
 const { Text } = Typography
 
@@ -70,7 +71,7 @@ export default function AppFooter() {
     const check = () => {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), 4_000)
-      fetch('/api/health', { signal: controller.signal })
+      fetch(`${API_BASE}/api/health`, { signal: controller.signal })
         .then((res) => { clearTimeout(timer); setApiOk(res.ok) })
         .catch(() => { clearTimeout(timer); setApiOk(false) })
     }
