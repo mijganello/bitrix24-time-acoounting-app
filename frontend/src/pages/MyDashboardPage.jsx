@@ -327,6 +327,7 @@ export default function MyDashboardPage() {
               placeholder="Выберите сотрудника"
               options={users.map((u) => ({ value: u.id, label: u.name }))}
               loading={users.length === 0}
+              virtual={false}
             />
             <Text type="secondary">Период:</Text>
             <RangePicker

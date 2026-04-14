@@ -170,6 +170,7 @@ export default function HomePage() {
               filterOption={(input, opt) =>
                 opt.label.toLowerCase().includes(input.toLowerCase())
               }
+              virtual={false}
             />
           </Col>
           <Col>
