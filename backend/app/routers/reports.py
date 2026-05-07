@@ -14,7 +14,15 @@ from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from app.auth import get_current_user
+from app.background_replication import get_cached_report, upsert_cached_report
+from app.database import get_db, SessionLocal
+from app.kpi_snapshots import build_kpi_snapshot
+from app.models import User
+from app.rbac import apply_visibility_to_report, assert_can_view_bitrix_user, visible_bitrix_user_ids
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
@@ -125,6 +133,103 @@ def _in_range(item: dict, date_from: date | None, date_to: date | None) -> bool:
     return True
 
 
+def _days_in_range(date_from: date, date_to: date) -> int:
+    return (date_to - date_from).days + 1
+
+
+def _min_max_normalize(values: dict[int, float]) -> dict[int, float]:
+    if not values:
+        return {}
+
+    min_value = min(values.values())
+    max_value = max(values.values())
+
+    if max_value == min_value:
+        fill = 0.0 if max_value == 0 else 1.0
+        return {key: fill for key in values}
+
+    return {
+        key: (value - min_value) / (max_value - min_value)
+        for key, value in values.items()
+    }
+
+
+def _comparison_profile(
+    *,
+    project_share: float,
+    active_days: int,
+    overtime_days: int,
+    period_days: int,
+) -> str:
+    if overtime_days >= max(1, period_days // 5):
+        return "risk_of_overload"
+    if project_share >= 0.7:
+        return "project_focused"
+    if active_days >= max(3, int(period_days * 0.6)):
+        return "stable"
+    return "spot_activity"
+
+
+def _db_for_cache(db: Session | None):
+    if db is not None:
+        return db, False
+    return SessionLocal(), True
+
+
+def _read_cached(
+    report_type: str,
+    date_from: date,
+    date_to: date,
+    current_user: User | None,
+    db: Session | None,
+    *,
+    user_id: int | None = None,
+    project_id: int | None = None,
+) -> dict | None:
+    cache_db, should_close = _db_for_cache(db)
+    try:
+        cached = get_cached_report(
+            cache_db,
+            report_type,
+            date_from,
+            date_to,
+            user_id=user_id,
+            project_id=project_id,
+        )
+        return apply_visibility_to_report(cached, current_user) if cached else None
+    finally:
+        if should_close:
+            cache_db.close()
+
+
+def _store_cached(
+    report_type: str,
+    date_from: date,
+    date_to: date,
+    payload: dict,
+    db: Session | None,
+    *,
+    user_id: int | None = None,
+    project_id: int | None = None,
+    is_full: bool = False,
+) -> None:
+    cache_db, should_close = _db_for_cache(db)
+    try:
+        upsert_cached_report(
+            cache_db,
+            report_type,
+            date_from,
+            date_to,
+            payload,
+            user_id=user_id,
+            project_id=project_id,
+            is_full=is_full,
+        )
+    finally:
+        if should_close:
+            cache_db.close()
+
+
 # ---------------------------------------------------------------------------
 # Отчёт 1: Сводка по пользователям за период
 # ---------------------------------------------------------------------------
@@ -134,11 +239,22 @@ async def report_users_summary(
     date_from: date = Query(..., description="Начало периода (YYYY-MM-DD)"),
     date_to: date = Query(..., description="Конец периода (YYYY-MM-DD)"),
     user_id: Optional[int] = Query(None, description="Фильтр по конкретному пользователю"),
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+    use_cache: bool = Query(True, include_in_schema=False),
+    is_full_refresh: bool = Query(False, include_in_schema=False),
 ):
     """
     Сводка: кто сколько времени потратил за период.
     Разбивка на задачи с проектом и без проекта.
     """
+    if user_id is not None:
+        assert_can_view_bitrix_user(current_user, user_id)
+    if use_cache:
+        cached = _read_cached("users_summary", date_from, date_to, current_user, db, user_id=user_id)
+        if cached:
+            return cached
+
     async with httpx.AsyncClient() as client:
         tasks = await _get_all_tasks(client)
         task_ids = [int(t["id"]) for t in tasks]
@@ -215,17 +331,156 @@ async def report_users_summary(
         reverse=True,
     )
 
-    return {
+    payload = {
         "date_from": date_from.isoformat(),
         "date_to": date_to.isoformat(),
         "users": rows,
         "total_seconds": sum(r["seconds_total"] for r in rows),
         "total_hours": round(sum(r["seconds_total"] for r in rows) / 3600, 2),
     }
+    _store_cached("users_summary", date_from, date_to, payload, db, user_id=user_id, is_full=is_full_refresh)
+    return apply_visibility_to_report(payload, current_user)
 
 
 # ---------------------------------------------------------------------------
 # Отчёт 2: Детализация по проектам
+# ---------------------------------------------------------------------------
+
+@router.get("/employees-comparison")
+async def report_employees_comparison(
+    date_from: date = Query(..., description="Начало периода (YYYY-MM-DD)"),
+    date_to: date = Query(..., description="Конец периода (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+    use_cache: bool = Query(True, include_in_schema=False),
+    is_full_refresh: bool = Query(False, include_in_schema=False),
+):
+    if use_cache:
+        cached = _read_cached("employees_comparison", date_from, date_to, current_user, db)
+        if cached:
+            return cached
+
+    async with httpx.AsyncClient() as client:
+        tasks = await _get_all_tasks(client)
+        task_ids = [int(t["id"]) for t in tasks]
+        elapsed_raw = await _get_elapsed_batch(client, task_ids)
+
+    elapsed = [e for e in elapsed_raw if _in_range(e, date_from, date_to)]
+    task_has_project = {
+        int(t["id"]): bool(t.get("groupId") and int(t["groupId"]) != 0)
+        for t in tasks
+    }
+
+    aggregates: dict[int, dict] = defaultdict(lambda: {
+        "seconds_total": 0,
+        "task_ids": set(),
+        "active_days": set(),
+        "seconds_with_project": 0,
+        "day_seconds": defaultdict(int),
+    })
+
+    for e in elapsed:
+        uid = int(e["USER_ID"])
+        tid = int(e["TASK_ID"])
+        secs = int(e["SECONDS"])
+        dt = _parse_dt(e.get("CREATED_DATE"))
+        day_key = dt.date().isoformat() if dt else None
+
+        aggregates[uid]["seconds_total"] += secs
+        aggregates[uid]["task_ids"].add(tid)
+        if day_key:
+            aggregates[uid]["active_days"].add(day_key)
+            aggregates[uid]["day_seconds"][day_key] += secs
+        if task_has_project.get(tid, False):
+            aggregates[uid]["seconds_with_project"] += secs
+
+    async with httpx.AsyncClient() as client:
+        users = await _get_users(client, list(aggregates.keys()))
+
+    period_days = _days_in_range(date_from, date_to)
+    employee_rows: list[dict] = []
+
+    for uid, agg in aggregates.items():
+        total_seconds = agg["seconds_total"]
+        active_days = len(agg["active_days"])
+        overtime_days = sum(1 for secs in agg["day_seconds"].values() if secs > 8 * 3600)
+        project_share = (agg["seconds_with_project"] / total_seconds) if total_seconds else 0.0
+
+        employee_rows.append({
+            "user_id": uid,
+            "user_name": users.get(uid, {}).get("name", f"user#{uid}"),
+            "seconds_total": total_seconds,
+            "hours_total": round(total_seconds / 3600, 2),
+            "tasks_count": len(agg["task_ids"]),
+            "active_days": active_days,
+            "active_days_share": round(active_days / period_days, 3) if period_days else 0.0,
+            "project_share": round(project_share, 3),
+            "project_share_percent": round(project_share * 100, 1),
+            "overtime_days": overtime_days,
+            "profile": _comparison_profile(
+                project_share=project_share,
+                active_days=active_days,
+                overtime_days=overtime_days,
+                period_days=period_days,
+            ),
+        })
+
+    hours_norm = _min_max_normalize({row["user_id"]: row["hours_total"] for row in employee_rows})
+    tasks_norm = _min_max_normalize({row["user_id"]: row["tasks_count"] for row in employee_rows})
+    active_days_norm = _min_max_normalize({row["user_id"]: row["active_days"] for row in employee_rows})
+    project_share_norm = _min_max_normalize({row["user_id"]: row["project_share"] for row in employee_rows})
+    overtime_norm = _min_max_normalize({row["user_id"]: row["overtime_days"] for row in employee_rows})
+
+    for row in employee_rows:
+        uid = row["user_id"]
+        normalized = {
+            "hours": round(hours_norm.get(uid, 0.0), 3),
+            "tasks": round(tasks_norm.get(uid, 0.0), 3),
+            "active_days": round(active_days_norm.get(uid, 0.0), 3),
+            "project_share": round(project_share_norm.get(uid, 0.0), 3),
+            "overtime": round(overtime_norm.get(uid, 0.0), 3),
+        }
+        score_raw = (
+            0.35 * normalized["hours"]
+            + 0.25 * normalized["tasks"]
+            + 0.20 * normalized["active_days"]
+            + 0.20 * normalized["project_share"]
+            - 0.10 * normalized["overtime"]
+        )
+        row["score"] = round(max(score_raw, 0) * 100, 1)
+        row["normalized"] = normalized
+
+    employee_rows.sort(key=lambda row: (row["score"], row["hours_total"]), reverse=True)
+
+    for index, row in enumerate(employee_rows, start=1):
+        row["rank"] = index
+
+    payload = {
+        "date_from": date_from.isoformat(),
+        "date_to": date_to.isoformat(),
+        "period_days": period_days,
+        "formula": "0.35*H + 0.25*T + 0.20*D + 0.20*P - 0.10*O",
+        "weights": {
+            "hours": 0.35,
+            "tasks": 0.25,
+            "active_days": 0.20,
+            "project_share": 0.20,
+            "overtime": -0.10,
+        },
+        "employees": employee_rows,
+    }
+    _store_cached("employees_comparison", date_from, date_to, payload, db, is_full=is_full_refresh)
+    kpi_db, should_close = _db_for_cache(db)
+    try:
+        build_kpi_snapshot(kpi_db, date_from, date_to, is_full=is_full_refresh)
+    finally:
+        if should_close:
+            kpi_db.close()
+    return apply_visibility_to_report(payload, current_user)
+
+
+# ---------------------------------------------------------------------------
+# Report 3: Projects report
 # ---------------------------------------------------------------------------
 
 @router.get("/projects")
@@ -234,7 +489,18 @@ async def report_projects(
     date_to: date = Query(..., description="Конец периода (YYYY-MM-DD)"),
     user_id: Optional[int] = Query(None, description="Фильтр по пользователю"),
     project_id: Optional[int] = Query(None, description="Фильтр по проекту (0 = без проекта)"),
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+    use_cache: bool = Query(True, include_in_schema=False),
+    is_full_refresh: bool = Query(False, include_in_schema=False),
 ):
+    if user_id is not None:
+        assert_can_view_bitrix_user(current_user, user_id)
+    if use_cache:
+        cached = _read_cached("projects", date_from, date_to, current_user, db, user_id=user_id, project_id=project_id)
+        if cached:
+            return cached
+
     """
     Дерево: проект → задача → пользователь → секунды.
     Задачи без проекта выделены в отдельную группу.
@@ -318,7 +584,7 @@ async def report_projects(
     no_project = next((p for p in project_nodes if p["project_id"] is None), None)
     with_projects = [p for p in project_nodes if p["project_id"] is not None]
 
-    return {
+    payload = {
         "date_from": date_from.isoformat(),
         "date_to": date_to.isoformat(),
         "projects": with_projects,
@@ -326,6 +592,8 @@ async def report_projects(
         "total_seconds": sum(p["seconds"] for p in project_nodes),
         "total_hours": round(sum(p["seconds"] for p in project_nodes) / 3600, 2),
     }
+    _store_cached("projects", date_from, date_to, payload, db, user_id=user_id, project_id=project_id, is_full=is_full_refresh)
+    return apply_visibility_to_report(payload, current_user)
 
 
 # ---------------------------------------------------------------------------
@@ -337,7 +605,15 @@ async def report_team_heatmap(
     date_from: date = Query(..., description="Начало периода (YYYY-MM-DD)"),
     date_to: date = Query(..., description="Конец периода (YYYY-MM-DD)"),
     user_ids: Optional[str] = Query(None, description="ID пользователей через запятую"),
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+    use_cache: bool = Query(True, include_in_schema=False),
+    is_full_refresh: bool = Query(False, include_in_schema=False),
 ):
+    if use_cache and not user_ids:
+        cached = _read_cached("team_heatmap", date_from, date_to, current_user, db)
+        if cached:
+            return cached
     """
     Матрица нагрузки: user × date → секунды.
     Позволяет построить тепловую карту переработок и простоев.
@@ -403,12 +679,15 @@ async def report_team_heatmap(
         reverse=True,
     )
 
-    return {
+    payload = {
         "date_from": date_from.isoformat(),
         "date_to": date_to.isoformat(),
         "dates": dates,
         "users": user_rows,
     }
+    if not user_ids:
+        _store_cached("team_heatmap", date_from, date_to, payload, db, is_full=is_full_refresh)
+    return apply_visibility_to_report(payload, current_user)
 
 
 def _load_level(seconds: int) -> str:
@@ -442,7 +721,16 @@ async def report_my_dashboard(
     user_id: int = Query(..., description="ID пользователя"),
     date_from: date = Query(..., description="Начало периода (YYYY-MM-DD)"),
     date_to: date = Query(..., description="Конец периода (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+    use_cache: bool = Query(True, include_in_schema=False),
+    is_full_refresh: bool = Query(False, include_in_schema=False),
 ):
+    assert_can_view_bitrix_user(current_user, user_id)
+    if use_cache:
+        cached = _read_cached("my_dashboard", date_from, date_to, current_user, db, user_id=user_id)
+        if cached:
+            return cached
     """
     Личный дашборд: итоговые часы, топ задач, разбивка по проектам и дням.
     """
@@ -517,7 +805,7 @@ async def report_my_dashboard(
         key=lambda x: x["date"],
     )
 
-    return {
+    payload = {
         "user_id": user_id,
         "user_name": users.get(user_id, {}).get("name", f"user#{user_id}"),
         "date_from": date_from.isoformat(),
@@ -528,6 +816,8 @@ async def report_my_dashboard(
         "by_project": by_project,
         "by_date": by_date_list,
     }
+    _store_cached("my_dashboard", date_from, date_to, payload, db, user_id=user_id, is_full=is_full_refresh)
+    return payload
 
 
 # ---------------------------------------------------------------------------
@@ -535,15 +825,19 @@ async def report_my_dashboard(
 # ---------------------------------------------------------------------------
 
 @router.get("/users-list")
-async def report_users_list():
+async def report_users_list(current_user: User = Depends(get_current_user)):
     """Все активные пользователи портала (для фильтров)."""
     async with httpx.AsyncClient() as client:
         result = await _bx(client, "user.get", {"ACTIVE": True})
     items = result if isinstance(result, list) else []
-    return [
+    rows = [
         {
             "id": int(u["ID"]),
             "name": f"{u.get('NAME', '')} {u.get('LAST_NAME', '')}".strip(),
         }
         for u in items
     ]
+    allowed = visible_bitrix_user_ids(current_user)
+    if allowed is not None:
+        rows = [row for row in rows if row["id"] in allowed]
+    return rows

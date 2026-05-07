@@ -5,7 +5,7 @@ import {
 } from 'antd'
 import {
   ClockCircleOutlined, TeamOutlined, ProjectOutlined,
-  HeatMapOutlined, UserOutlined, ArrowRightOutlined,
+  HeatMapOutlined, UserOutlined, ArrowRightOutlined, TrophyOutlined,
   ThunderboltOutlined, CalendarOutlined, OrderedListOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
@@ -21,10 +21,12 @@ const { Title, Text } = Typography
 const PERIOD_OPTIONS = [
   { label: 'Эта неделя', value: 'week' },
   { label: 'Этот месяц', value: 'month' },
+  { label: '3 месяца', value: 'quarter' },
 ]
 
 function getPeriodRange(key) {
   if (key === 'week') return [dayjs().startOf('week'), dayjs().endOf('week')]
+  if (key === 'quarter') return [dayjs().subtract(2, 'month').startOf('month'), dayjs().endOf('month')]
   return [dayjs().startOf('month'), dayjs().endOf('month')]
 }
 
@@ -75,6 +77,14 @@ const REPORT_CARDS = [
     icon: <ProjectOutlined style={{ fontSize: 26, color: '#52c41a' }} />,
     path: '/reports/projects',
     color: 'rgba(82,196,26,0.09)',
+  },
+  {
+    key: 'employees-comparison',
+    title: 'Сравнение сотрудников',
+    description: 'Интегральный рейтинг по часам, задачам, активным дням и переработкам',
+    icon: <TrophyOutlined style={{ fontSize: 26, color: '#faad14' }} />,
+    path: '/reports/employees-comparison',
+    color: 'rgba(250,173,20,0.10)',
   },
   {
     key: 'team-heatmap',
@@ -402,4 +412,3 @@ export default function HomePage() {
     </div>
   )
 }
-

@@ -4,36 +4,47 @@ import {
   ProjectOutlined,
   HeatMapOutlined,
   UserOutlined,
+  TrophyOutlined,
   ArrowRightOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
 
 const { Title, Text, Paragraph } = Typography
 
 const REPORTS = [
   {
     key: 'users-summary',
-    title: 'Сводка по пользователям',
+    title: 'Сводка по сотрудникам',
     description:
       'Кто сколько времени потратил за выбранный период. Разбивка на задачи с проектом и без проекта.',
     icon: <TeamOutlined style={{ fontSize: 28, color: '#4361d8' }} />,
-    tags: ['пользователи', 'период'],
+    tags: ['сотрудники', 'период'],
     path: '/reports/users-summary',
   },
   {
     key: 'projects',
     title: 'Детализация по проектам',
     description:
-      'Дерево: проект → задача → пользователь → часы. Задачи без проекта выделены в отдельную группу.',
+      'Дерево: проект -> задача -> сотрудник -> часы. Задачи без проекта выделены в отдельную группу.',
     icon: <ProjectOutlined style={{ fontSize: 28, color: '#4361d8' }} />,
-    tags: ['проекты', 'задачи', 'пользователи'],
+    tags: ['проекты', 'задачи', 'часы'],
     path: '/reports/projects',
+  },
+  {
+    key: 'employees-comparison',
+    title: 'Сравнение сотрудников',
+    description:
+      'Интегральный рейтинг по часам, числу задач, активным дням, доле проектной работы и переработкам.',
+    icon: <TrophyOutlined style={{ fontSize: 28, color: '#4361d8' }} />,
+    tags: ['рейтинг', 'метрики', 'сравнение'],
+    path: '/reports/employees-comparison',
   },
   {
     key: 'team-heatmap',
     title: 'Нагрузка команды',
     description:
-      'Матрица нагрузки по дням: выявляет пики переработок и простои. Цвета от idle до overtime.',
+      'Матрица нагрузки по дням: помогает увидеть пики переработок и периоды простоя.',
     icon: <HeatMapOutlined style={{ fontSize: 28, color: '#4361d8' }} />,
     tags: ['команда', 'дни', 'нагрузка'],
     path: '/reports/team-heatmap',
@@ -51,6 +62,9 @@ const REPORTS = [
 
 export default function ReportsPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const canViewTeam = ['manager', 'admin', 'boss'].includes(user?.role)
+  const reports = canViewTeam ? REPORTS : REPORTS.filter((report) => report.key === 'my-dashboard')
 
   return (
     <div>
@@ -62,7 +76,7 @@ export default function ReportsPage() {
       </Text>
 
       <Row gutter={[20, 20]}>
-        {REPORTS.map((report) => (
+        {reports.map((report) => (
           <Col key={report.key} xs={24} sm={24} md={12} xl={12} xxl={8}>
             <Card
               hoverable

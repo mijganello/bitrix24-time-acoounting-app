@@ -12,6 +12,7 @@ import HomePage from './pages/HomePage'
 import PlatformStatusPage from './pages/PlatformStatusPage'
 import ReportsPage from './pages/ReportsPage'
 import UsersSummaryPage from './pages/UsersSummaryPage'
+import EmployeesComparisonPage from './pages/EmployeesComparisonPage'
 import ProjectsReportPage from './pages/ProjectsReportPage'
 import TeamHeatmapPage from './pages/TeamHeatmapPage'
 import MyDashboardPage from './pages/MyDashboardPage'
@@ -59,6 +60,7 @@ function AppLayout() {
             <Route path="/status" element={<PlatformStatusPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/reports/users-summary" element={<UsersSummaryPage />} />
+            <Route path="/reports/employees-comparison" element={<EmployeesComparisonPage />} />
             <Route path="/reports/projects" element={<ProjectsReportPage />} />
             <Route path="/reports/team-heatmap" element={<TeamHeatmapPage />} />
             <Route path="/reports/my-dashboard" element={<MyDashboardPage />} />

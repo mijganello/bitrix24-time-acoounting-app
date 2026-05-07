@@ -24,6 +24,27 @@ export const authService = {
     return data
   },
 
+  async loginWithBitrix({ authId, domain, refreshId }) {
+    const res = await fetch(`${API_BASE}/api/auth/bitrix/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        auth_id: authId,
+        domain,
+        refresh_id: refreshId,
+      }),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'РћС€РёР±РєР° РІС…РѕРґР° С‡РµСЂРµР· Bitrix24')
+    }
+
+    const data = await res.json()
+    localStorage.setItem(TOKEN_KEY, data.access_token)
+    return data
+  },
+
   logout() {
     localStorage.removeItem(TOKEN_KEY)
   },

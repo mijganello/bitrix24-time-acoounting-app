@@ -6,13 +6,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine
 from app.models import Base
+from app import background_replication, bitrix_registration, kpi_snapshots
 from app.routers import auth, bitrix, reports
+from app.schema_upgrades import ensure_schema_upgrades
 from app.version import APP_NAME, STAGE, VERSION
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    ensure_schema_upgrades(engine)
     yield
 
 
@@ -32,8 +35,10 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(bitrix_registration.router)
 app.include_router(bitrix.router)
 app.include_router(reports.router)
+app.include_router(kpi_snapshots.router)
 
 
 @app.get("/api/health")

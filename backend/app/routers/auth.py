@@ -20,6 +20,10 @@ class UserOut(BaseModel):
     username: str
     is_active: bool
     avatar_color: str | None = None
+    role: str = "employee"
+    bitrix_user_id: int | None = None
+    display_name: str | None = None
+    department_id: int | None = None
 
     model_config = {"from_attributes": True}
 

@@ -10,3 +10,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     avatar_color = Column(String, nullable=True)
+    role = Column(String, nullable=False, default="admin")
+    bitrix_user_id = Column(Integer, unique=True, index=True, nullable=True)
+    display_name = Column(String, nullable=True)
+    department_id = Column(Integer, nullable=True)

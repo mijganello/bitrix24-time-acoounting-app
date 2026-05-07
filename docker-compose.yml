@@ -9,6 +9,10 @@ services:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -19,10 +23,50 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - DATABASE_URL=postgresql://bitrix_user:bitrix_pass@db:5432/bitrix_app
+      - REDIS_URL=redis://redis:6379/0
     env_file:
       - .env
     depends_on:
       - db
+      - redis
+    restart: unless-stopped
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A app.background_replication.celery_app worker --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - DATABASE_URL=postgresql://bitrix_user:bitrix_pass@db:5432/bitrix_app
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A app.background_replication.celery_app beat --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - DATABASE_URL=postgresql://bitrix_user:bitrix_pass@db:5432/bitrix_app
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
     restart: unless-stopped
 
   frontend:
@@ -35,6 +79,14 @@ services:
     environment:
       - NODE_ENV=development
     restart: unless-stopped
+
+  adminer:
+    image: adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
 
   nginx:
     image: nginx:1.27-alpine

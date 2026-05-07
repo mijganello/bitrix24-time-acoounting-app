@@ -8,6 +8,23 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const authId = params.get('AUTH_ID') || params.get('auth_id')
+    const domain = params.get('DOMAIN') || params.get('domain')
+    const refreshId = params.get('REFRESH_ID') || params.get('refresh_id')
+    if (authId) {
+      authService
+        .loginWithBitrix({ authId, domain, refreshId })
+        .then(() => authService.getMe())
+        .then(setUser)
+        .catch(() => setUser(null))
+        .finally(() => {
+          window.history.replaceState({}, document.title, window.location.pathname)
+          setLoading(false)
+        })
+      return
+    }
+
     if (!authService.isAuthenticated()) {
       setLoading(false)
       return
