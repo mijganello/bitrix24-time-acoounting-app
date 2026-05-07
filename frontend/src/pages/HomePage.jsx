@@ -157,7 +157,7 @@ export default function HomePage() {
       {/* Приветствие */}
       <div style={{ marginBottom: 28 }}>
         <Title level={3} style={{ margin: 0, fontWeight: 700 }}>
-          {greeting()}{user ? `, ${user.username}` : ''} 👋
+          {greeting()}{user ? `, ${user.display_name || user.username}` : ''} 👋
         </Title>
         <Text type="secondary">
           {dayjs().format('dddd, D MMMM YYYY')}

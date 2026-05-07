@@ -6,13 +6,14 @@ const { Text } = Typography
 export default function HeaderUser() {
   const { user } = useAuth()
 
-  const avatarLetter = user?.username?.[0]?.toUpperCase() ?? '?'
+  const displayName = user?.display_name || user?.username
+  const avatarLetter = displayName?.[0]?.toUpperCase() ?? '?'
   const avatarColor = user?.avatar_color ?? '#4361d8'
 
   return (
     <Space size={10} align="center">
       <Text style={{ color: 'rgba(0,0,0,0.6)' }}>
-        {user?.username}
+        {displayName}
       </Text>
       <Avatar
         size={34}
