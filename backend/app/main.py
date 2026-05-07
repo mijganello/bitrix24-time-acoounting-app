@@ -26,10 +26,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_raw_origins = os.getenv("CORS_ORIGINS", os.getenv("FRONTEND_URL", ""))
+_origin_list: list[str] = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+_allow_origins = _origin_list if _origin_list else ["*"]
+_allow_credentials = bool(_origin_list)  # credentials несовместимы с wildcard "*"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_URL", "*")],
-    allow_credentials=True,
+    allow_origins=_allow_origins,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
