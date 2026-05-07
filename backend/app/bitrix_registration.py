@@ -1,8 +1,9 @@
 import os
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Form, HTTPException, status
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -77,6 +78,39 @@ def upsert_bitrix_user(db: Session, bitrix_user: dict) -> tuple[User, bool]:
     db.commit()
     db.refresh(user)
     return user, created
+
+
+@router.post("/frame")
+async def bitrix_frame(
+    AUTH_ID: str | None = Form(None),
+    REFRESH_ID: str | None = Form(None),
+    DOMAIN: str | None = Form(None),
+    auth_id: str | None = Form(None),
+    refresh_id: str | None = Form(None),
+    domain: str | None = Form(None),
+):
+    """
+    Принимает POST от Bitrix24 (form-data) при открытии приложения в iframe.
+    Редиректит на фронтенд с параметрами в query string, чтобы useAuth.jsx мог их прочитать.
+    """
+    effective_auth_id = AUTH_ID or auth_id
+    effective_domain = DOMAIN or domain
+    effective_refresh_id = REFRESH_ID or refresh_id
+
+    frontend_url = os.getenv("FRONTEND_URL", "").rstrip("/") or ""
+    params: dict[str, str] = {}
+    if effective_auth_id:
+        params["AUTH_ID"] = effective_auth_id
+    if effective_domain:
+        params["DOMAIN"] = effective_domain
+    if effective_refresh_id:
+        params["REFRESH_ID"] = effective_refresh_id
+
+    redirect_url = f"{frontend_url}/"
+    if params:
+        redirect_url += "?" + urlencode(params)
+
+    return RedirectResponse(url=redirect_url, status_code=302)
 
 
 @router.post("/login", response_model=BitrixLoginOut)
