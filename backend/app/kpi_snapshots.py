@@ -29,10 +29,14 @@ router = APIRouter(prefix="/api/kpi", tags=["kpi"])
 
 
 def build_kpi_snapshot(db: Session, date_from: date, date_to: date, *, is_full: bool = False) -> dict | None:
-    from app.background_replication import get_cached_report
+    from app.background_replication import _find_row
 
-    comparison = get_cached_report(db, "employees_comparison", date_from, date_to)
-    summary = get_cached_report(db, "users_summary", date_from, date_to)
+    def _get_payload(report_type: str) -> dict | None:
+        row = _find_row(db, report_type, date_from, date_to, None, None)
+        return row.payload if row else None
+
+    comparison = _get_payload("employees_comparison")
+    summary = _get_payload("users_summary")
     if not comparison:
         return None
 

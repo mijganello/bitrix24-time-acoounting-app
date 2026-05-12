@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
-from app.background_replication import get_cached_report, upsert_cached_report
+from app.background_replication import track_and_get_cached_report, upsert_cached_report
 from app.database import get_db, SessionLocal
 from app.kpi_snapshots import build_kpi_snapshot
 from app.models import User
@@ -185,10 +185,15 @@ def _read_cached(
     *,
     user_id: int | None = None,
     project_id: int | None = None,
-) -> dict | None:
+) -> tuple[dict | None, bool]:
+    """
+    Track the request and return (payload, is_eligible).
+    payload is None on cache miss or when hit threshold not yet reached.
+    is_eligible signals whether the computed result should be stored.
+    """
     cache_db, should_close = _db_for_cache(db)
     try:
-        cached = get_cached_report(
+        payload, is_eligible = track_and_get_cached_report(
             cache_db,
             report_type,
             date_from,
@@ -196,7 +201,9 @@ def _read_cached(
             user_id=user_id,
             project_id=project_id,
         )
-        return apply_visibility_to_report(cached, current_user) if cached else None
+        if payload is not None:
+            payload = apply_visibility_to_report(payload, current_user)
+        return payload, is_eligible
     finally:
         if should_close:
             cache_db.close()
@@ -212,6 +219,7 @@ def _store_cached(
     user_id: int | None = None,
     project_id: int | None = None,
     is_full: bool = False,
+    is_standard: bool = False,
 ) -> None:
     cache_db, should_close = _db_for_cache(db)
     try:
@@ -224,6 +232,7 @@ def _store_cached(
             user_id=user_id,
             project_id=project_id,
             is_full=is_full,
+            is_standard=is_standard,
         )
     finally:
         if should_close:
@@ -243,6 +252,7 @@ async def report_users_summary(
     current_user: User | None = Depends(get_current_user),
     use_cache: bool = Query(True, include_in_schema=False),
     is_full_refresh: bool = Query(False, include_in_schema=False),
+    is_standard: bool = Query(False, include_in_schema=False),
 ):
     """
     Сводка: кто сколько времени потратил за период.
@@ -250,8 +260,9 @@ async def report_users_summary(
     """
     if user_id is not None:
         assert_can_view_bitrix_user(current_user, user_id)
+    is_eligible = not use_cache
     if use_cache:
-        cached = _read_cached("users_summary", date_from, date_to, current_user, db, user_id=user_id)
+        cached, is_eligible = _read_cached("users_summary", date_from, date_to, current_user, db, user_id=user_id)
         if cached:
             return cached
 
@@ -338,7 +349,8 @@ async def report_users_summary(
         "total_seconds": sum(r["seconds_total"] for r in rows),
         "total_hours": round(sum(r["seconds_total"] for r in rows) / 3600, 2),
     }
-    _store_cached("users_summary", date_from, date_to, payload, db, user_id=user_id, is_full=is_full_refresh)
+    if is_eligible:
+        _store_cached("users_summary", date_from, date_to, payload, db, user_id=user_id, is_full=is_full_refresh, is_standard=is_standard)
     return apply_visibility_to_report(payload, current_user)
 
 
@@ -354,9 +366,11 @@ async def report_employees_comparison(
     current_user: User | None = Depends(get_current_user),
     use_cache: bool = Query(True, include_in_schema=False),
     is_full_refresh: bool = Query(False, include_in_schema=False),
+    is_standard: bool = Query(False, include_in_schema=False),
 ):
+    is_eligible = not use_cache
     if use_cache:
-        cached = _read_cached("employees_comparison", date_from, date_to, current_user, db)
+        cached, is_eligible = _read_cached("employees_comparison", date_from, date_to, current_user, db)
         if cached:
             return cached
 
@@ -469,7 +483,8 @@ async def report_employees_comparison(
         },
         "employees": employee_rows,
     }
-    _store_cached("employees_comparison", date_from, date_to, payload, db, is_full=is_full_refresh)
+    if is_eligible:
+        _store_cached("employees_comparison", date_from, date_to, payload, db, is_full=is_full_refresh, is_standard=is_standard)
     kpi_db, should_close = _db_for_cache(db)
     try:
         build_kpi_snapshot(kpi_db, date_from, date_to, is_full=is_full_refresh)
@@ -493,11 +508,13 @@ async def report_projects(
     current_user: User | None = Depends(get_current_user),
     use_cache: bool = Query(True, include_in_schema=False),
     is_full_refresh: bool = Query(False, include_in_schema=False),
+    is_standard: bool = Query(False, include_in_schema=False),
 ):
     if user_id is not None:
         assert_can_view_bitrix_user(current_user, user_id)
+    is_eligible = not use_cache
     if use_cache:
-        cached = _read_cached("projects", date_from, date_to, current_user, db, user_id=user_id, project_id=project_id)
+        cached, is_eligible = _read_cached("projects", date_from, date_to, current_user, db, user_id=user_id, project_id=project_id)
         if cached:
             return cached
 
@@ -592,7 +609,8 @@ async def report_projects(
         "total_seconds": sum(p["seconds"] for p in project_nodes),
         "total_hours": round(sum(p["seconds"] for p in project_nodes) / 3600, 2),
     }
-    _store_cached("projects", date_from, date_to, payload, db, user_id=user_id, project_id=project_id, is_full=is_full_refresh)
+    if is_eligible:
+        _store_cached("projects", date_from, date_to, payload, db, user_id=user_id, project_id=project_id, is_full=is_full_refresh, is_standard=is_standard)
     return apply_visibility_to_report(payload, current_user)
 
 
@@ -609,9 +627,11 @@ async def report_team_heatmap(
     current_user: User | None = Depends(get_current_user),
     use_cache: bool = Query(True, include_in_schema=False),
     is_full_refresh: bool = Query(False, include_in_schema=False),
+    is_standard: bool = Query(False, include_in_schema=False),
 ):
+    is_eligible = not use_cache and not user_ids
     if use_cache and not user_ids:
-        cached = _read_cached("team_heatmap", date_from, date_to, current_user, db)
+        cached, is_eligible = _read_cached("team_heatmap", date_from, date_to, current_user, db)
         if cached:
             return cached
     """
@@ -685,8 +705,8 @@ async def report_team_heatmap(
         "dates": dates,
         "users": user_rows,
     }
-    if not user_ids:
-        _store_cached("team_heatmap", date_from, date_to, payload, db, is_full=is_full_refresh)
+    if not user_ids and is_eligible:
+        _store_cached("team_heatmap", date_from, date_to, payload, db, is_full=is_full_refresh, is_standard=is_standard)
     return apply_visibility_to_report(payload, current_user)
 
 
@@ -725,10 +745,12 @@ async def report_my_dashboard(
     current_user: User | None = Depends(get_current_user),
     use_cache: bool = Query(True, include_in_schema=False),
     is_full_refresh: bool = Query(False, include_in_schema=False),
+    is_standard: bool = Query(False, include_in_schema=False),
 ):
     assert_can_view_bitrix_user(current_user, user_id)
+    is_eligible = not use_cache
     if use_cache:
-        cached = _read_cached("my_dashboard", date_from, date_to, current_user, db, user_id=user_id)
+        cached, is_eligible = _read_cached("my_dashboard", date_from, date_to, current_user, db, user_id=user_id)
         if cached:
             return cached
     """
@@ -816,7 +838,8 @@ async def report_my_dashboard(
         "by_project": by_project,
         "by_date": by_date_list,
     }
-    _store_cached("my_dashboard", date_from, date_to, payload, db, user_id=user_id, is_full=is_full_refresh)
+    if is_eligible:
+        _store_cached("my_dashboard", date_from, date_to, payload, db, user_id=user_id, is_full=is_full_refresh, is_standard=is_standard)
     return payload
 
 
