@@ -273,13 +273,13 @@ async def _refresh_all_cached() -> dict:
         )
         if row.report_type == "users_summary":
             await report_users_summary(user_id=row.user_id, **kwargs)
-        elif row.report_type == "employees_comparison":
+        elif row.report_type in ("employees_comparison", "employees_comparison_kpi_v2"):
             await report_employees_comparison(**kwargs)
         elif row.report_type == "projects":
             await report_projects(user_id=row.user_id, project_id=row.project_id, **kwargs)
-        elif row.report_type == "team_heatmap":
+        elif row.report_type in ("team_heatmap", "team_heatmap_v2"):
             await report_team_heatmap(user_ids=None, **kwargs)
-        elif row.report_type == "my_dashboard" and row.user_id is not None:
+        elif row.report_type in ("my_dashboard", "my_dashboard_v2") and row.user_id is not None:
             await report_my_dashboard(user_id=row.user_id, **kwargs)
 
     refreshed_custom = 0

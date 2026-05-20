@@ -19,9 +19,9 @@ import {
 } from 'antd'
 import {
   SearchOutlined,
+  CheckCircleOutlined,
   ClockCircleOutlined,
   ArrowLeftOutlined,
-  TrophyOutlined,
   CalendarOutlined,
   ProjectOutlined,
   OrderedListOutlined,
@@ -78,7 +78,7 @@ const DAY_LEVEL_CONFIG = {
 
 function dayLevel(hours) {
   if (hours === 0) return 'idle'
-  if (hours < 4) return 'low'
+  if (hours < 5) return 'low'
   if (hours <= 8) return 'normal'
   return 'overtime'
 }
@@ -111,6 +111,8 @@ function ActivityGrid({ byDate, dateFrom, dateTo }) {
               <span>
                 {dt.format('D MMMM')} ({['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'][dt.day()]})<br />
                 {hours > 0 ? fmtHours(hours) : 'нет данных'}
+                <br />
+                {entry?.paid_shift ? 'смена оплачивается' : 'норма 5 часов не набрана'}
               </span>
             }
             mouseEnterDelay={0.1}
@@ -121,7 +123,7 @@ function ActivityGrid({ byDate, dateFrom, dateTo }) {
                 height: 32,
                 borderRadius: 6,
                 background: isWeekend && level === 'idle' ? '#f8f8f8' : cfg.bg,
-                border: `1px solid ${isWeekend && level === 'idle' ? '#efefef' : cfg.border}`,
+                border: entry?.paid_shift ? '1px solid #52c41a' : `1px solid ${isWeekend && level === 'idle' ? '#efefef' : cfg.border}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -275,6 +277,7 @@ export default function MyDashboardPage() {
     range?.[0] && range?.[1] && data
       ? Math.round((totalHours / Math.max(workingDays(range[0], range[1]), 1)) * 10) / 10
       : 0
+  const paidShiftDays = data?.paid_shift_days ?? 0
 
   const normColor = normPercent >= 100 ? '#cf1322' : normPercent >= 70 ? '#389e0d' : '#faad14'
 
@@ -379,10 +382,10 @@ export default function MyDashboardPage() {
             <Col xs={24} sm={8}>
               <Card size="small">
                 <Statistic
-                  title="Задач выполнено"
-                  value={data.top_tasks?.length ?? 0}
-                  prefix={<TrophyOutlined style={{ color: '#faad14' }} />}
-                  valueStyle={{ color: '#d46b08', fontSize: 22 }}
+                  title="Смен от 5 часов"
+                  value={paidShiftDays}
+                  prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
+                  valueStyle={{ color: '#389e0d', fontSize: 22 }}
                 />
               </Card>
             </Col>
@@ -467,8 +470,8 @@ export default function MyDashboardPage() {
                   <Text type="secondary" style={{ fontSize: 12 }}>Нагрузка:</Text>
                   {[
                     { label: '0 ч', bg: '#f0f0f0', border: '#e0e0e0', color: '#bbb' },
-                    { label: '< 4 ч', bg: '#fff7e6', border: '#ffd591', color: '#d46b08' },
-                    { label: '4–8 ч', bg: '#f6ffed', border: '#b7eb8f', color: '#389e0d' },
+                    { label: '< 5 ч', bg: '#fff7e6', border: '#ffd591', color: '#d46b08' },
+                    { label: '5–8 ч', bg: '#f6ffed', border: '#b7eb8f', color: '#389e0d' },
                     { label: '> 8 ч', bg: '#fff1f0', border: '#ffa39e', color: '#cf1322' },
                   ].map((item) => (
                     <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -484,6 +487,9 @@ export default function MyDashboardPage() {
                       <Text style={{ fontSize: 12, color: item.color }}>{item.label}</Text>
                     </div>
                   ))}
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    зелёная рамка — смена оплачивается по правилу {data.paid_shift_threshold_hours ?? 5} ч
+                  </Text>
                 </Space>
               </Card>
             </Col>

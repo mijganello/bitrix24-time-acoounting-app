@@ -33,11 +33,11 @@ const REPORTS = [
   },
   {
     key: 'employees-comparison',
-    title: 'Сравнение сотрудников',
+    title: 'KPI-метрики',
     description:
-      'Интегральный рейтинг по часам, числу задач, активным дням, доле проектной работы и переработкам.',
+      'Подотчеты с простыми KPI: оплачиваемые смены по правилу 5 часов, проектный фокус и регулярность работы.',
     icon: <TrophyOutlined style={{ fontSize: 28, color: '#4361d8' }} />,
-    tags: ['рейтинг', 'метрики', 'сравнение'],
+    tags: ['KPI', 'метрики', 'подотчеты'],
     path: '/reports/employees-comparison',
   },
   {
@@ -63,7 +63,7 @@ const REPORTS = [
 export default function ReportsPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const canViewTeam = ['manager', 'admin', 'boss'].includes(user?.role)
+  const canViewTeam = ['manager', 'admin'].includes(user?.role)
   const reports = canViewTeam ? REPORTS : REPORTS.filter((report) => report.key === 'my-dashboard')
 
   return (

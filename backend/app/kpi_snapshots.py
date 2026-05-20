@@ -35,7 +35,7 @@ def build_kpi_snapshot(db: Session, date_from: date, date_to: date, *, is_full: 
         row = _find_row(db, report_type, date_from, date_to, None, None)
         return row.payload if row else None
 
-    comparison = _get_payload("employees_comparison")
+    comparison = _get_payload("employees_comparison_kpi_v2") or _get_payload("employees_comparison")
     summary = _get_payload("users_summary")
     if not comparison:
         return None

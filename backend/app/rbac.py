@@ -10,14 +10,12 @@ class Role(StrEnum):
     EMPLOYEE = "employee"
     MANAGER = "manager"
     ADMIN = "admin"
-    BOSS = "boss"
 
 
 ROLE_LEVELS = {
     Role.EMPLOYEE: 10,
     Role.MANAGER: 50,
     Role.ADMIN: 80,
-    Role.BOSS: 100,
 }
 
 

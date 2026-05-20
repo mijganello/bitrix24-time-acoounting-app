@@ -15,9 +15,9 @@ import {
 } from 'antd'
 import {
   SearchOutlined,
+  CheckCircleOutlined,
   ClockCircleOutlined,
   ArrowLeftOutlined,
-  TeamOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
@@ -41,8 +41,8 @@ const PRESETS = [
 
 const LEVEL_CONFIG = {
   idle:     { bg: '#f0f0f0', color: '#bbb',    label: '0 ч',     border: '#e0e0e0' },
-  low:      { bg: '#fff7e6', color: '#d46b08',  label: '< 4 ч',   border: '#ffd591' },
-  normal:   { bg: '#f6ffed', color: '#389e0d',  label: '4–8 ч',   border: '#b7eb8f' },
+  low:      { bg: '#fff7e6', color: '#d46b08',  label: '< 5 ч',   border: '#ffd591' },
+  normal:   { bg: '#f6ffed', color: '#389e0d',  label: '5–8 ч',   border: '#b7eb8f' },
   overtime: { bg: '#fff1f0', color: '#cf1322',  label: '> 8 ч',   border: '#ffa39e' },
 }
 
@@ -62,6 +62,10 @@ function HeatCell({ day }) {
           {fmtHours(day.hours)}
           <br />
           <span style={{ opacity: 0.75, fontSize: 11 }}>{cfg.label}</span>
+          <br />
+          <span style={{ opacity: 0.75, fontSize: 11 }}>
+            {day.paid_shift ? 'смена оплачивается' : 'норма не набрана'}
+          </span>
         </span>
       }
       mouseEnterDelay={0.1}
@@ -72,7 +76,7 @@ function HeatCell({ day }) {
           height: 36,
           borderRadius: 6,
           background: cfg.bg,
-          border: `1px solid ${cfg.border}`,
+          border: day.paid_shift ? '1px solid #52c41a' : `1px solid ${cfg.border}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -211,6 +215,7 @@ function Legend() {
           <Text style={{ fontSize: 12, color: cfg.color }}>{cfg.label}</Text>
         </div>
       ))}
+      <Text type="secondary" style={{ fontSize: 12 }}>✓ смена от 5 ч</Text>
     </div>
   )
 }
@@ -252,6 +257,9 @@ export default function TeamHeatmapPage() {
   }, 0) ?? 0
 
   const totalHours = data?.users?.reduce((s, u) => s + u.total_hours, 0) ?? 0
+  const paidShiftDays = data?.users?.reduce((sum, u) => {
+    return sum + Object.values(u.days ?? {}).filter((d) => d.paid_shift).length
+  }, 0) ?? 0
 
   return (
     <ConfigProvider locale={locale}>
@@ -333,9 +341,9 @@ export default function TeamHeatmapPage() {
             <Col xs={24} sm={8}>
               <Card size="small">
                 <Statistic
-                  title="Сотрудников в отчёте"
-                  value={data.users?.length ?? 0}
-                  prefix={<TeamOutlined style={{ color: '#52c41a' }} />}
+                  title="Смен от 5 часов"
+                  value={paidShiftDays}
+                  prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
                   valueStyle={{ color: '#389e0d', fontSize: 22 }}
                 />
               </Card>

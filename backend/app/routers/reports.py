@@ -170,6 +170,21 @@ def _comparison_profile(
     return "spot_activity"
 
 
+PAID_SHIFT_THRESHOLD_SECONDS = 5 * 3600
+
+
+def _is_paid_shift(seconds: int) -> bool:
+    return seconds >= PAID_SHIFT_THRESHOLD_SECONDS
+
+
+def _metric_status(value: float, good_from: float, warning_from: float) -> str:
+    if value >= good_from:
+        return "good"
+    if value >= warning_from:
+        return "warning"
+    return "risk"
+
+
 def _db_for_cache(db: Session | None):
     if db is not None:
         return db, False
@@ -370,7 +385,7 @@ async def report_employees_comparison(
 ):
     is_eligible = not use_cache
     if use_cache:
-        cached, is_eligible = _read_cached("employees_comparison", date_from, date_to, current_user, db)
+        cached, is_eligible = _read_cached("employees_comparison_kpi_v2", date_from, date_to, current_user, db)
         if cached:
             return cached
 
@@ -418,6 +433,8 @@ async def report_employees_comparison(
         total_seconds = agg["seconds_total"]
         active_days = len(agg["active_days"])
         overtime_days = sum(1 for secs in agg["day_seconds"].values() if secs > 8 * 3600)
+        paid_shift_days = sum(1 for secs in agg["day_seconds"].values() if _is_paid_shift(secs))
+        paid_shift_share = paid_shift_days / active_days if active_days else 0.0
         project_share = (agg["seconds_with_project"] / total_seconds) if total_seconds else 0.0
 
         employee_rows.append({
@@ -431,6 +448,11 @@ async def report_employees_comparison(
             "project_share": round(project_share, 3),
             "project_share_percent": round(project_share * 100, 1),
             "overtime_days": overtime_days,
+            "paid_shift_days": paid_shift_days,
+            "paid_shift_share": round(paid_shift_share, 3),
+            "paid_shift_percent": round(paid_shift_share * 100, 1),
+            "average_hours_per_active_day": round((total_seconds / 3600) / active_days, 2) if active_days else 0,
+            "work_rhythm_percent": round((active_days / period_days) * 100, 1) if period_days else 0,
             "profile": _comparison_profile(
                 project_share=project_share,
                 active_days=active_days,
@@ -473,6 +495,7 @@ async def report_employees_comparison(
         "date_from": date_from.isoformat(),
         "date_to": date_to.isoformat(),
         "period_days": period_days,
+        "paid_shift_threshold_hours": round(PAID_SHIFT_THRESHOLD_SECONDS / 3600, 1),
         "formula": "0.35*H + 0.25*T + 0.20*D + 0.20*P - 0.10*O",
         "weights": {
             "hours": 0.35,
@@ -484,7 +507,7 @@ async def report_employees_comparison(
         "employees": employee_rows,
     }
     if is_eligible:
-        _store_cached("employees_comparison", date_from, date_to, payload, db, is_full=is_full_refresh, is_standard=is_standard)
+        _store_cached("employees_comparison_kpi_v2", date_from, date_to, payload, db, is_full=is_full_refresh, is_standard=is_standard)
     kpi_db, should_close = _db_for_cache(db)
     try:
         build_kpi_snapshot(kpi_db, date_from, date_to, is_full=is_full_refresh)
@@ -631,7 +654,7 @@ async def report_team_heatmap(
 ):
     is_eligible = not use_cache and not user_ids
     if use_cache and not user_ids:
-        cached, is_eligible = _read_cached("team_heatmap", date_from, date_to, current_user, db)
+        cached, is_eligible = _read_cached("team_heatmap_v2", date_from, date_to, current_user, db)
         if cached:
             return cached
     """
@@ -685,6 +708,7 @@ async def report_team_heatmap(
                     d: {
                         "seconds": matrix[uid].get(d, 0),
                         "hours": round(matrix[uid].get(d, 0) / 3600, 2),
+                        "paid_shift": _is_paid_shift(matrix[uid].get(d, 0)),
                         # уровень нагрузки: idle / low / normal / overtime
                         "level": _load_level(matrix[uid].get(d, 0)),
                     }
@@ -703,10 +727,11 @@ async def report_team_heatmap(
         "date_from": date_from.isoformat(),
         "date_to": date_to.isoformat(),
         "dates": dates,
+        "paid_shift_threshold_hours": round(PAID_SHIFT_THRESHOLD_SECONDS / 3600, 1),
         "users": user_rows,
     }
     if not user_ids and is_eligible:
-        _store_cached("team_heatmap", date_from, date_to, payload, db, is_full=is_full_refresh, is_standard=is_standard)
+        _store_cached("team_heatmap_v2", date_from, date_to, payload, db, is_full=is_full_refresh, is_standard=is_standard)
     return apply_visibility_to_report(payload, current_user)
 
 
@@ -714,7 +739,7 @@ def _load_level(seconds: int) -> str:
     hours = seconds / 3600
     if hours == 0:
         return "idle"
-    if hours < 4:
+    if hours < 5:
         return "low"
     if hours <= 8:
         return "normal"
@@ -750,7 +775,7 @@ async def report_my_dashboard(
     assert_can_view_bitrix_user(current_user, user_id)
     is_eligible = not use_cache
     if use_cache:
-        cached, is_eligible = _read_cached("my_dashboard", date_from, date_to, current_user, db, user_id=user_id)
+        cached, is_eligible = _read_cached("my_dashboard_v2", date_from, date_to, current_user, db, user_id=user_id)
         if cached:
             return cached
     """
@@ -823,7 +848,16 @@ async def report_my_dashboard(
             by_date[dt.date().isoformat()] += int(e["SECONDS"])
 
     by_date_list = sorted(
-        [{"date": d, "seconds": s, "hours": round(s / 3600, 2)} for d, s in by_date.items()],
+        [
+            {
+                "date": d,
+                "seconds": s,
+                "hours": round(s / 3600, 2),
+                "paid_shift": _is_paid_shift(s),
+                "paid_shift_missing_hours": round(max(PAID_SHIFT_THRESHOLD_SECONDS - s, 0) / 3600, 2),
+            }
+            for d, s in by_date.items()
+        ],
         key=lambda x: x["date"],
     )
 
@@ -834,12 +868,14 @@ async def report_my_dashboard(
         "date_to": date_to.isoformat(),
         "total_seconds": total_seconds,
         "total_hours": round(total_seconds / 3600, 2),
+        "paid_shift_threshold_hours": round(PAID_SHIFT_THRESHOLD_SECONDS / 3600, 1),
+        "paid_shift_days": sum(1 for row in by_date_list if row["paid_shift"]),
         "top_tasks": top_tasks,
         "by_project": by_project,
         "by_date": by_date_list,
     }
     if is_eligible:
-        _store_cached("my_dashboard", date_from, date_to, payload, db, user_id=user_id, is_full=is_full_refresh, is_standard=is_standard)
+        _store_cached("my_dashboard_v2", date_from, date_to, payload, db, user_id=user_id, is_full=is_full_refresh, is_standard=is_standard)
     return payload
 
 

@@ -80,8 +80,8 @@ const REPORT_CARDS = [
   },
   {
     key: 'employees-comparison',
-    title: 'Сравнение сотрудников',
-    description: 'Интегральный рейтинг по часам, задачам, активным дням и переработкам',
+    title: 'KPI-метрики',
+    description: 'Оплачиваемые смены, проектный фокус и ритм работы',
     icon: <TrophyOutlined style={{ fontSize: 26, color: '#faad14' }} />,
     path: '/reports/employees-comparison',
     color: 'rgba(250,173,20,0.10)',
