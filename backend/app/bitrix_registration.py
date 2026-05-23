@@ -85,17 +85,21 @@ async def bitrix_frame(
     AUTH_ID: str | None = Form(None),
     REFRESH_ID: str | None = Form(None),
     DOMAIN: str | None = Form(None),
+    PLACEMENT: str | None = Form(None),
     auth_id: str | None = Form(None),
     refresh_id: str | None = Form(None),
     domain: str | None = Form(None),
+    placement: str | None = Form(None),
 ):
     """
     Принимает POST от Bitrix24 (form-data) при открытии приложения в iframe.
     Редиректит на фронтенд с параметрами в query string, чтобы useAuth.jsx мог их прочитать.
+    Если PLACEMENT отсутствует — Bitrix24 вызвал страницу установки, передаём install=1.
     """
     effective_auth_id = AUTH_ID or auth_id
     effective_domain = DOMAIN or domain
     effective_refresh_id = REFRESH_ID or refresh_id
+    effective_placement = PLACEMENT or placement
 
     frontend_url = os.getenv("FRONTEND_URL", "").rstrip("/") or ""
     params: dict[str, str] = {}
@@ -105,6 +109,8 @@ async def bitrix_frame(
         params["DOMAIN"] = effective_domain
     if effective_refresh_id:
         params["REFRESH_ID"] = effective_refresh_id
+    if not effective_placement:
+        params["install"] = "1"
 
     redirect_url = f"{frontend_url}/"
     if params:
