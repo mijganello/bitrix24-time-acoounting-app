@@ -555,7 +555,7 @@ export default function EmployeesComparisonPage() {
               )}
             </Card>
 
-            <Card size="small" title="Интегральный рейтинг">
+            <Card size="small" title="Итоговый рейтинг">
               <Table
                 dataSource={employees}
                 columns={ratingColumns}
